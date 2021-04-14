@@ -15,7 +15,7 @@ classes_matrices_prediction_count = 0
 do_path_depth = 0
 print_depth = 0
 debug = False
-test = True
+test = False
 
 def __main():
     global test
@@ -23,6 +23,7 @@ def __main():
     dataset = get_dataset(params[0], params[1])
     dataset = do_values(dataset)
     dataset = prepare_dataset(dataset)
+    dataset = do_good(dataset)
     dataset = do_value_matrix(dataset)
     dataset = do_entropy_matrix(dataset)
     dataset = do_info_gain_matrix(dataset)
@@ -75,7 +76,7 @@ def check_params(params = None):
         return None
 
 def get_dataset(filename, num_classes):
-    dataset = {"attributes": { "names" : [], "data" : [], "values" : [], "matrices": {"value": [], "entropy": [], "info-gain": []}}, "classes": {"names" : [], "data" : [], "values" : [], "matrices": {"value": [], "entropy": [], "info-gain": [], "tree": [], "prediction": []}}, "nrecords": 0}
+    dataset = {"attributes": { "names" : [], "data" : [], "values" : [], "matrices": {"value": [], "entropy": [], "info-gain": []}}, "classes": {"names" : [], "data" : [], "values" : [], "goodness" : [], "matrices": {"value": [], "entropy": [], "info-gain": [], "tree": [], "prediction": []}}, "nrecords": 0}
     good_read = False
     delimiters = [";", ",", "|", "\t"]
     while not good_read:
@@ -90,6 +91,8 @@ def get_dataset(filename, num_classes):
             dataset["classes"]["names"] = row[len(dataset["attributes"]["names"]):len(row)]
             dataset["attributes"]["data"] = [None] * len(dataset["attributes"]["names"])
             dataset["classes"]["data"] = [None] * len(dataset["classes"]["names"])
+            for b in range(len(dataset["classes"]["names"])):
+                break
             for row in readcsv:
                 for a in range(len(dataset["attributes"]["names"])):
                     if dataset["attributes"]["data"][a] == None:
@@ -154,12 +157,18 @@ def do_values(dataset):
         for data in dataset["attributes"]["data"][a]:
             if data not in dataset["attributes"]["values"][a]:
                 dataset["attributes"]["values"][a].append(data)
+    is_numeric = True
     for b in range(len(dataset["classes"]["names"])):
         for data in dataset["classes"]["data"][b]:
             if dataset["classes"]["values"][b] == None:
                 dataset["classes"]["values"][b] = []
             if data not in dataset["classes"]["values"][b]:
+                if is_numeric and not data.isnumeric():
+                    is_numeric = False
                 dataset["classes"]["values"][b].append(data)
+    if is_numeric:
+        for b in range(len(dataset["classes"]["names"])):
+            dataset["classes"]["values"][b].sort(key = float)
     log_attributes_values(dataset)
     log_classes_values(dataset)
     return dataset
@@ -205,7 +214,7 @@ def prepare_dataset(dataset):
             for r in range(len(dataset["attributes"]["data"][a])):
                 for x in range(len(dataset["attributes"]["values"][a])):
                     limits = dataset["attributes"]["values"][a][x].split("-")
-                    if dataset["attributes"]["data"][a][r].isdecimal() and int(dataset["attributes"]["data"][a][r]) >= int(limits[1]) and int(dataset["attributes"]["data"][a][r]) <= int(limits[0]):
+                    if dataset["attributes"]["data"][a][r].isdecimal() and int(dataset["attributes"]["data"][a][r]) >= int(limits[0]) and int(dataset["attributes"]["data"][a][r]) <= int(limits[1]):
                         dataset["attributes"]["data"][a][r] = dataset["attributes"]["values"][a][x]
     for b in range(len(dataset["classes"]["names"])):
         if len(dataset["classes"]["values"][b]) > 5:
@@ -213,7 +222,7 @@ def prepare_dataset(dataset):
             for r in range(len(dataset["classes"]["data"][b])):
                 for y in range(len(dataset["classes"]["values"][b])):
                     limits = dataset["classes"]["values"][b][y].split("-")
-                    if dataset["classes"]["data"][b][r].isdecimal() and int(dataset["classes"]["data"][b][r]) >= int(limits[1]) and int(dataset["classes"]["data"][b][r]) <= int(limits[0]):
+                    if dataset["classes"]["data"][b][r].isdecimal() and int(dataset["classes"]["data"][b][r]) >= int(limits[0]) and int(dataset["classes"]["data"][b][r]) <= int(limits[1]):
                         dataset["classes"]["data"][b][r] = dataset["classes"]["values"][b][y]
     log_prepared_attributes(dataset)
     log_prepared_classes(dataset)
@@ -265,12 +274,13 @@ def normalize(data):
     div = div[len(div) - 1]
     for i in range(div):
         if i == 0:
-            d.append(str(max) + "-" + str(int(max - rng * ((i + 1) / div) + 1)))
+            d.append(str(int(max - rng * ((i + 1) / div) + 1)) + "-" + str(max))
         elif i == div - 1:
-            d.append(str(int(max - rng * (i / div))) + "-" + str(min))
+            d.append(str(min) + "-" + str(int(max - rng * (i / div))))
             break
         else:
-            d.append(str(int(max - rng * (i / div))) + "-" + str(int(max - rng * ((i + 1) / div)) + 1))
+            d.append(str(int(max - rng * ((i + 1) / div)) + 1) + "-" + str(int(max - rng * (i / div))))
+    d.reverse()
     return d
 
 def get_min(data):
@@ -290,7 +300,17 @@ def get_max(data):
         if int(data[i]) > max:
             max = int(data[i])
     return max
-    
+
+def do_good(dataset):
+    for b in range(len(dataset["classes"]["names"])):
+        dataset["classes"]["goodness"].append([])
+        print(dataset["classes"]["values"][b])
+        for y in range(len(dataset["classes"]["values"][b])):
+            goodness = math.tan((2 * (y / (len(dataset["classes"]["values"][b]) - 1))) - 1)
+            dataset["classes"]["goodness"][b].append(goodness)
+            print(dataset["classes"]["goodness"][b][y])
+    return dataset
+
 def do_value_matrix(dataset):
     dataset["attributes"]["matrices"]["value"] = [None] * len(dataset["attributes"]["names"])
     for a in range(len(dataset["attributes"]["names"])):
@@ -525,6 +545,8 @@ def do_tree_matrix(dataset):
         tree = Tree(head, dataset["classes"]["names"][b])
         print(do_path_depth, "head")
         dataset["classes"]["matrices"]["tree"].append(do_path(dataset, tree, b))
+    for b in range(len(dataset["classes"]["names"])):
+        dataset["classes"]["matrices"]["tree"][b].head.get_good()
     log_classes_tree_matrix(dataset)
     return dataset  
 
@@ -542,7 +564,7 @@ def do_path(dataset, tree, cls_index):
             for y in range(1, len(newset["classes"]["values"][b])):
                 if newset["attributes"]["matrices"]["value"][a][b][x][y] > newset["attributes"]["matrices"]["value"][a][b][x][h]:
                     h = y
-            tree.current.paths[x].connect(TreeLeaf(newset["classes"]["values"][b][h]))
+            tree.current.paths[x].connect(TreeLeaf(newset["classes"]["values"][b][h], newset["classes"]["goodness"][b][h]))
             print(do_path_depth, "    leaf")
         else:
             newset = do_info_gain_matrix(newset)
@@ -598,9 +620,8 @@ def do_prediction_matrix(dataset):
     for b in range(1, len(testset["classes"]["names"])):
         prediction += ";" + testset["classes"]["names"][b]
     dataset["classes"]["matrices"]["prediction"].append(prediction)
-    for r in range(len(testset["attributes"]["data"])):
+    for r in range(testset["nrecords"]):
         prediction = ""
-        print()
         for a in range(len(testset["attributes"]["names"])):
             prediction += testset["attributes"]["data"][a][r] + ";"
         prediction += str(dataset["classes"]["matrices"]["tree"][0].evaluate_data(testset, r))
@@ -632,7 +653,7 @@ def get_new_set(dataset, tree, val_index):
         while popping:
             popping = False
             for r in range(newset["nrecords"]):
-                if newset["attributes"]["data"][a][r] not in range(int(rng[1]), int(rng[0]) + 1):
+                if newset["attributes"]["data"][a][r] not in range(int(rng[0]), int(rng[1]) + 1):
                     for i in range(len(newset["attributes"]["data"])):
                         newset["attributes"]["data"][i].pop(r)
                     for j in range(len(newset["classes"]["data"])):
@@ -672,6 +693,7 @@ def create_directory(directory):
 class Tree(object):
     def __init__(self, head, classifier):
         self.max_depth = 0
+        self.min_depth = 0
         self.depth = 0
         self.head = head
         self.classifier = classifier
@@ -729,7 +751,7 @@ class Tree(object):
                     for j in range(len(self.current.values)):
                         if "-" in self.current.values[j]:
                             rng = self.current.values[j].split("-")
-                            if int(dataset["attributes"]["data"][i][r]) in range(int(rng[1]), int(rng[0]) + 1):
+                            if int(dataset["attributes"]["data"][i][r]) in range(int(rng[0]), int(rng[1]) + 1):
                                 self.current = self.current.paths[j].child
                                 result = self.evaluate_record(dataset, r)
                                 self.current = current
@@ -745,22 +767,30 @@ class Tree(object):
         current = self.current
         self.current = self.head
         self.__pt__()
+        self.print_depth()
         self.current = current
+
+    def print_depth(self):
+        print("max depth:", self.max_depth)
+        print("min depth:", self.min_depth)
     
     def __pt__(self):
         indent = "  " * self.depth
         if type(self.current) is TreeLeaf:
+            self.min_depth = self.depth if self.min_depth == 0 else self.min_depth
+            self.max_depth = self.depth if self.depth > self.max_depth else self.max_depth
+            self.min_depth = self.depth if self.depth < self.min_depth else self.min_depth
             print(self.depth, indent, "leaf", "|", self.classifier, "|", self.current.parent_path.parent.name, ":", self.current.parent_path.value, "|", self.current.value)
         else:
             children = self.get_children()
             prev = ""
-            paths = self.current.paths[0].value
             if self.current.parent_path == None:
                 prev = "head | " + self.classifier
             else:
                 prev = "node | " + self.classifier + " | " + str(self.current.parent_path.parent.name) + " : " + str(self.current.parent_path.value)
+            paths = self.current.paths[0].value + " [ " + str(round(self.current.paths[0].child.goodness, 4)) + " ] "
             for p in range(1, len(self.current.paths)):
-                paths += " : " + str(self.current.paths[p].value)
+                paths += " : " + str(self.current.paths[p].value) + " [ " + str(round(self.current.paths[p].child.goodness, 4)) + " ] "
             print(self.depth, indent, prev, "|", self.current.name, "|", paths)
             for c in range(len(children)):
                 current = self.current
@@ -778,8 +808,14 @@ class TreeNode(object):
         self.index = index
         self.parent_path = parent_path
         self.paths = []
-        for i in range(len(values)):
-            self.paths.append(TreePath(self, values[i], i))
+        self.goodness = 0
+        for v in range(len(values)):
+            self.paths.append(TreePath(self, values[v], v))
+
+    def get_good(self):
+        for p in range(len(self.paths)):
+            self.goodness += self.paths[p].child.get_good() / len(self.paths)
+        return self.goodness
 
 class TreePath(object):
     def __init__(self, parent, value, index):
@@ -792,8 +828,11 @@ class TreePath(object):
         return self.child
 
 class TreeLeaf(object):
-    def __init__(self, value):
+    def __init__(self, value, goodness):
         self.value = value
+        self.goodness = goodness
         self.parent_path = None
+    def get_good(self):
+        return self.goodness
 
 __main()
