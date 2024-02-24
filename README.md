@@ -1,5 +1,5 @@
 # How To Get Good
-This is an early class project of mine from university. The project builds a decision tree to make predictions on a given CSV dataset.
+This is an early class project of mine from university. The project builds a decision tree to make predictions on a given CSV dataset. Being that this project is for learning purposes, it is less than perfect. It's been a while since I executed this script and unfortunately, it suffers infinite recursion that I do not recall being present when I presented the project. This bug causes a stack overflow error. You can try running the script, but for now, it's better to just examine the code to see how the decision tree is built and executed. Once I have some time, I will update this project to be more efficient and to remove the bugs.
 
 Using a terminal,
 
